@@ -30,6 +30,7 @@ def api_analyze():
         code=code,
         language=language,
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
+        gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
         provider=os.getenv("AI_PROVIDER", "mock").strip().lower()
     )
 
