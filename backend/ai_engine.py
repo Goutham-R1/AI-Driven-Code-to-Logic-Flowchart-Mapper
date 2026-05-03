@@ -33,8 +33,7 @@ def _unparse(node) -> str:
     try:
         return _ast.unparse(node)
     except (AttributeError, TypeError, ValueError):
-        # AttributeError: ast.unparse missing (Python < 3.9, shouldn't happen with 3.12+)
-        # TypeError/ValueError: unexpected node type or unparseable construct
+        # Fallback for any node type that cannot be unparsed
         return type(node).__name__
 
 
