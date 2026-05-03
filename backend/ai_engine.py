@@ -97,12 +97,68 @@ Code:
 
     return obj
 
-def analyze_code(code: str, language: str, openai_api_key: str, provider: str = "mock"):
+def _gemini_analyze(code: str, language: str, api_key: str):
+    model = "gemini-2.0-flash"
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent?key={api_key}"
+    )
+
+    user_prompt = f"""
+{SYSTEM_RULES}
+
+Analyze the following {language} code.
+1) Produce a short human-readable explanation.
+2) Produce a Mermaid flowchart (\"graph TD\") with Start/End, decisions, loops, and function calls where relevant.
+3) Provide a node-to-line mapping (\"nodeMap\") for clickable highlighting.
+
+Code:
+{code}
+""".strip()
+
+    payload = {
+        "contents": [
+            {"role": "user", "parts": [{"text": user_prompt}]}
+        ],
+        "generationConfig": {"temperature": 0.2}
+    }
+
+    headers = {"Content-Type": "application/json"}
+
+    r = requests.post(url, headers=headers, json=payload, timeout=60)
+    r.raise_for_status()
+    data = r.json()
+
+    text = ""
+    for candidate in data.get("candidates", []):
+        for part in candidate.get("content", {}).get("parts", []):
+            text += part.get("text", "")
+    text = text.strip()
+
+    obj = _extract_json(text)
+
+    if "mermaid" not in obj or "explanation" not in obj or "nodeMap" not in obj:
+        raise ValueError("AI JSON missing required keys.")
+    if not str(obj["mermaid"]).lstrip().startswith("graph TD"):
+        raise ValueError("Mermaid must start with 'graph TD'.")
+
+    return obj
+
+
+def analyze_code(code: str, language: str, openai_api_key: str = "", gemini_api_key: str = "", provider: str = "mock"):
     if provider == "openai":
         if not openai_api_key:
             return _mock_analyze(code, language)
         try:
             return _openai_analyze(code, language, openai_api_key)
+        except Exception:
+            return _mock_analyze(code, language)
+
+    if provider == "gemini":
+        if not gemini_api_key:
+            return _mock_analyze(code, language)
+        try:
+            return _gemini_analyze(code, language, gemini_api_key)
         except Exception:
             return _mock_analyze(code, language)
 
