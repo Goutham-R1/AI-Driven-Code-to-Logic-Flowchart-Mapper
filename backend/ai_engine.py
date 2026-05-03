@@ -32,7 +32,9 @@ def _unparse(node) -> str:
     """Safely convert an AST node back to source text."""
     try:
         return _ast.unparse(node)
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
+        # AttributeError: ast.unparse missing (Python < 3.9, shouldn't happen with 3.12+)
+        # TypeError/ValueError: unexpected node type or unparseable construct
         return type(node).__name__
 
 
@@ -53,7 +55,9 @@ def _esc(text: str) -> str:
 class _MermaidBuilder:
     """Walk a Python AST and produce a Mermaid TD flowchart + nodeMap."""
 
-    _END = "E"
+    # Stable IDs for the fixed Start/End terminal nodes
+    _START = "S"
+    _END = "FLOW_END"
 
     def __init__(self):
         self._node_defs = []
@@ -109,10 +113,12 @@ class _MermaidBuilder:
         for exit_id, exit_type in final_exits:
             self._edge(exit_id, self._END, "dotted" if exit_type == "return" else "solid")
 
+        end_id = self._END
+        start_id = self._START
         parts = ["graph TD"]
-        parts.append('S(["Start"])')
-        parts.append('E(["End"])')
-        parts.append(f"S --> {first_id}" if first_id else "S --> E")
+        parts.append(f'{start_id}(["Start"])')
+        parts.append(f'{end_id}(["End"])')
+        parts.append(f"{start_id} --> {first_id}" if first_id else f"{start_id} --> {end_id}")
         parts.extend(self._node_defs)
         parts.extend(self._edge_defs)
         return "\n".join(parts), self.node_map
@@ -431,9 +437,12 @@ def _extract_json(text: str):
 # OpenAI provider  (fixed endpoint + payload)
 # ---------------------------------------------------------------------------
 
+_OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
+
+
 def _openai_analyze(code: str, language: str, api_key: str):
     model = "gpt-4o-mini"
-    url = "https://api.openai.com/v1/chat/completions"
+    url = _OPENAI_CHAT_URL
 
     user_prompt = (
         f"Analyze the following {language} code.\n"
